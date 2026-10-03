@@ -6,7 +6,7 @@ measurement **M**, its Perimag component **P**, and its Synomag-70 component
 **S**, together with acquisition and synthesis metadata.
 
 The release name uses the conventional rounded size "18K". The current
-release contains **18,242 HDF5 samples** in total.
+release contains **18,241 HDF5 samples** in total.
 
 <img width="4925" height="3116" alt="figure5" src="https://github.com/user-attachments/assets/a728468b-6211-4e78-8806-5859a0dfcb81" />
 
