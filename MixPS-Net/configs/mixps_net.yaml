@@ -1,0 +1,38 @@
+model:
+  num_harmonics: 12
+  base_channels: 32
+  attention_heads: 2
+  operator_size: 21
+  operator_seed_size: 5
+  renderer_padding: reflect
+
+data:
+  train_subsets:
+    - MixPS-Simulation-7K
+    - MixPS-Synthetic-10K
+  val_subsets:
+    - MixPS-Simulation-7K
+    - MixPS-Synthetic-10K
+  test_subsets:
+    - MixPS-Simulation-7K
+    - MixPS-Synthetic-10K
+    - MixPS-Realworld-41
+  realworld_transpose: true
+  augmentation: true
+  include_simulation_stress_test: false
+
+training:
+  epochs: 100
+  batch_size: 8
+  num_workers: 4
+  learning_rate: 0.0001
+  weight_decay: 0.00001
+  min_learning_rate: 0.000001
+  gradient_clip: 1.0
+  seed: 42
+  amp: false
+
+loss:
+  alpha_p: 1.0
+  alpha_s: 1.0
+  alpha_m: 0.25

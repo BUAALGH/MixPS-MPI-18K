@@ -53,6 +53,7 @@ MixPS-MPI-18K/
 │   ├── build_manifest.py
 │   ├── package_zenodo.sh
 │   └── validate_dataset.py
+├── MixPS-Net/                    # official PyTorch implementation
 └── requirements.txt
 ```
 
@@ -105,6 +106,12 @@ python examples/load_mixps.py \
 See [DATA_LOADING_AND_USAGE.md](docs/DATA_LOADING_AND_USAGE.md) for NumPy and
 PyTorch usage, and [DATASET_INTRODUCTION.md](docs/DATASET_INTRODUCTION.md) for
 the full dataset card.
+
+## MixPS-Net
+
+The official four-stage HCMM-guided separation model, 100-epoch training
+configuration, and evaluation code are available in
+[`MixPS-Net/`](MixPS-Net/README.md).
 
 ## Integrity check
 
