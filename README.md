@@ -14,10 +14,10 @@ release contains **18,242 HDF5 samples** in total.
 
 | Subset                  |            Train |      Validation |            Test |            Total | Domain                   |
 | ----------------------- | ---------------: | --------------: | --------------: | ---------------: | ------------------------ |
-| `MixPS-Simulation-7K` |            6,300 |             700 |             701 |            7,701 | MNIST-derived simulation |
+| `MixPS-Simulation-7K` |            6,300 |             700 |             700 |            7,700 | MNIST-derived simulation |
 | `MixPS-Synthetic-10K` |            7,350 |           1,575 |           1,575 |           10,500 | paired phantom synthesis |
 | `MixPS-Realworld-41`  |                0 |               0 |              41 |               41 | real MPI measurements    |
-| **Total**         | **13,650** | **2,275** | **2,317** | **18,242** |                          |
+| **Total**         | **13,650** | **2,275** | **2,316** | **18,241** |                          |
 
 `MixPS-Simulation-7K/test/mix_00701.h5` is an additional strong
 P-dominant stress-test sample (`Alpha=50`, `Beta=1`). The standard simulation
