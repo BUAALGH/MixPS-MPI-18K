@@ -1,129 +1,237 @@
-# MixPS-MPI-18K
+# MixPS-MPI-18K and MixPS-Net
 
-MixPS-MPI-18K is a paired harmonic-image dataset for dual-tracer magnetic
-particle imaging (MPI) decomposition. Every HDF5 sample contains a mixed
-measurement **M**, its Perimag component **P**, and its Synomag-70 component
-**S**, together with acquisition and synthesis metadata.
+[![Python](https://img.shields.io/badge/Python-%E2%89%A53.9-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![PyTorch](https://img.shields.io/badge/PyTorch-%E2%89%A52.1-EE4C2C?logo=pytorch&logoColor=white)](https://pytorch.org/)
+[![Code License](https://img.shields.io/badge/code%20license-MIT-green.svg)](MixPS-Net/LICENSE)
+[![Dataset DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.22069325.svg)](https://doi.org/10.5281/zenodo.22069325)
 
-The release name uses the conventional rounded size "18K". The current
-release contains **18,241 HDF5 samples** in total.
+This repository provides **MixPS-MPI-18K**, a paired multi-harmonic benchmark
+for dual-tracer magnetic particle imaging (MPI), and **MixPS-Net**, its
+physics-guided reference model for separating Perimag (**P**) and Synomag-70
+(**S**) from a mixed measurement (**M**).
 
-<img width="4925" height="3116" alt="figure5" src="https://github.com/user-attachments/assets/a728468b-6211-4e78-8806-5859a0dfcb81" />
+- Dataset: 18,241 standard paired HDF5 samples across simulation, synthetic,
+  and real-world domains.
+- Input: 12 signed channels containing the real and imaginary components of
+  the `2f`--`7f` harmonics.
+- Output: separated 12-channel Perimag and Synomag harmonic images.
+- Model prior: a tracer-specific concentration field is shared across all
+  harmonic operators in the Harmonic Convolutional Mixing Model (HCMM).
 
-## Dataset partitions
+Dataset record: [Zenodo 10.5281/zenodo.22069325](https://doi.org/10.5281/zenodo.22069325)
 
-| Subset                  |            Train |      Validation |            Test |            Total | Domain                   |
-| ----------------------- | ---------------: | --------------: | --------------: | ---------------: | ------------------------ |
-| `MixPS-Simulation-7K` |            6,300 |             700 |             700 |            7,700 | MNIST-derived simulation |
-| `MixPS-Synthetic-10K` |            7,350 |           1,575 |           1,575 |           10,500 | paired phantom synthesis |
-| `MixPS-Realworld-41`  |                0 |               0 |              41 |               41 | real MPI measurements    |
-| **Total**         | **13,650** | **2,275** | **2,316** | **18,241** |                          |
+## Dataset overview
 
-`MixPS-Simulation-7K/test/mix_00701.h5` is an additional strong
-P-dominant stress-test sample (`Alpha=50`, `Beta=1`). The standard simulation
-test set consists of `mix_00001.h5` through `mix_00700.h5`.
+![Overview of MixPS-MPI-18K](MixPS-Net/figure5.png)
+
+**Figure 1.** MixPS-MPI-18K contains paired mixed, Perimag, and Synomag
+harmonic images from simulation, synthetic phantom, and real MPI measurements.
+
+| Subset | Train | Validation | Test | Total | Domain |
+| --- | ---: | ---: | ---: | ---: | --- |
+| `MixPS-Simulation-7K` | 6,300 | 700 | 700 | 7,700 | MNIST-derived simulation |
+| `MixPS-Synthetic-10K` | 7,350 | 1,575 | 1,575 | 10,500 | Paired phantom synthesis |
+| `MixPS-Realworld-41` | 0 | 0 | 41 | 41 | Real MPI measurements |
+| **Standard benchmark** | **13,650** | **2,275** | **2,316** | **18,241** | |
+
+`MixPS-Simulation-7K/test/mix_00701.h5` is an optional strong P-dominant
+stress sample (`Alpha=50`, `Beta=1`) and is excluded from the standard test
+set. Consequently, an extracted release containing this supplemental sample
+has 18,242 HDF5 files but still has 18,241 standard benchmark samples.
+
+### HDF5 schema
+
+Each `mix_XXXXX.h5` file stores:
+
+```text
+mix_XXXXX.h5
+├── /mix/image/real    [6, 64, 64]
+├── /mix/image/imag    [6, 64, 64]
+├── /P/image/real      [6, 64, 64]
+├── /P/image/imag      [6, 64, 64]
+├── /S/image/real      [6, 64, 64]
+├── /S/image/imag      [6, 64, 64]
+└── root attributes    acquisition or synthesis metadata
+```
+
+The six planes correspond to `2f`--`7f`; the model channel order is
+`[Re(2f), ..., Re(7f), Im(2f), ..., Im(7f)]`. For simulation and synthetic
+data, `M = P + S` by construction after applying the stored tracer mixing
+coefficients. For RealWorld-41, M, P, and S are paired acquisitions: M is an
+independently measured mixture, so exact element-wise additivity is not
+assumed.
+
+The original HDF5 payloads and their metadata are preserved. Historical root
+attributes such as `Project_Name=MixPS-MPI-50K` may therefore remain in some
+files; the curated public release is identified by its directory and manifest
+as MixPS-MPI-18K.
+
+### Dataset layout
+
+Download the dataset from Zenodo and extract it outside Git tracking:
+
+```text
+/path/to/MixPS-MPI-18K/data/
+├── MixPS-Simulation-7K/
+│   ├── train/
+│   ├── val/
+│   └── test/
+├── MixPS-Synthetic-10K/
+│   ├── train/
+│   ├── val/
+│   └── test/
+└── MixPS-Realworld-41/
+    └── test/
+```
+
+The downloadable documentation and loader examples are also available as
+[`docs.rar`](docs.rar) and [`examples.rar`](examples.rar).
+
+## MixPS-Net
+
+![MixPS-Net architecture](MixPS-Net/figure3.png)
+
+**Figure 2.** Four-stage MixPS-Net architecture. The model separates
+particle-specific features and explicitly factorizes each branch into a
+shared concentration field and harmonic-dependent signed operators before
+HCMM rendering.
+
+The implementation contains four stages:
+
+1. **Harmonic Feature Encoding (HFE).** Two `1x1` projections and two
+   reflection-padded residual blocks map
+   `M [B,K,H,W]` to `F [B,2C,H,W]`.
+2. **Particle Feature Separation (PFD).** Independent P- and S-specific
+   two-head self-attention branches produce
+   `F_P,F_S [B,2C,H,W]` from all `H*W` spatial tokens.
+3. **Operator-Concentration Factorization.** Each particle branch is
+   decomposed into concentration and operator latents
+   `Z_c,Z_h [B,C,H,W]`. Softplus makes the decoded concentration
+   nonnegative, whereas the harmonic operators remain signed.
+4. **HCMM Rendering.** For tracer `t` and harmonic `k`, the prediction is
+   `Y_hat_t^k = H_t^k * c_t`. The same `c_t` is shared across all harmonics,
+   and the reconstructed mixture is `M_hat = P_hat + S_hat`.
+
+The default configuration uses `K=12`, `C=32`, two attention heads,
+`64x64` inputs, and `21x21` harmonic operators. It contains 403,370 trainable
+parameters.
 
 ## Repository layout
 
 ```text
 MixPS-MPI-18K/
-├── data/
-│   ├── MixPS-Simulation-7K/
-│   │   ├── train/
-│   │   ├── val/
-│   │   └── test/
-│   ├── MixPS-Synthetic-10K/
-│   │   ├── train/
-│   │   ├── val/
-│   │   └── test/
-│   └── MixPS-Realworld-41/
-│       ├── train/                 # intentionally empty
-│       ├── val/                   # intentionally empty
-│       └── test/
-├── docs/
-│   ├── DATASET_INTRODUCTION.md
-│   ├── DATA_LOADING_AND_USAGE.md
-│   └── ZENODO_UPLOAD.md
-├── examples/
-│   └── load_mixps.py
-├── manifests/
-│   ├── dataset_manifest.csv
-│   └── SHA256SUMS
-├── tools/
-│   ├── build_manifest.py
-│   ├── package_zenodo.sh
-│   └── validate_dataset.py
-├── MixPS-Net/                    # official PyTorch implementation
-└── requirements.txt
+├── README.md
+├── MixPS-Net/
+│   ├── configs/mixps_net.yaml
+│   ├── mixps_net/
+│   │   ├── data.py
+│   │   ├── losses.py
+│   │   ├── metrics.py
+│   │   ├── model.py
+│   │   └── runtime.py
+│   ├── tests/test_model.py
+│   ├── train.py
+│   ├── evaluate.py
+│   ├── figure3.png
+│   └── figure5.png
+├── docs.rar
+└── examples.rar
 ```
 
-## One HDF5 sample
+## Installation
 
-```text
-mix_XXXXX.h5
-├── /mix/image/real    float32 or float64, [6, 64, 64]
-├── /mix/image/imag    float32 or float64, [6, 64, 64]
-├── /P/image/real      float32 or float64, [6, 64, 64]
-├── /P/image/imag      float32 or float64, [6, 64, 64]
-├── /S/image/real      float32 or float64, [6, 64, 64]
-├── /S/image/imag      float32 or float64, [6, 64, 64]
-└── root attributes    sample metadata
-```
-
-The public notation `M` maps to the HDF5 group `/mix`. The six planes are
-harmonics `2f` through `7f`, with nominal frequencies 6, 9, 12, 15, 18, and
-21 kHz. The spatial image size is 64 x 64 and the field of view is 20 mm x
-20 mm. For the simulation and synthetic subsets, ground truth follows the
-convention
-
-```text
-P = Alpha * raw_P
-S = Beta  * raw_S
-M = P + S
-```
-
-For `MixPS-Realworld-41`, M, P, and S are paired real measurements. M is an
-independently acquired mixture rather than an array constructed by adding the
-stored P and S scans, so exact element-wise `M=P+S` is neither expected nor
-enforced. This measurement-domain residual is intentionally preserved.
-
-The original HDF5 payloads are retained byte-for-byte so their provenance
-attributes remain unchanged. In particular, the historical root attribute
-`Project_Name` may still read `MixPS-MPI-50K`; the curated public release is
-identified by this directory and its manifest as `MixPS-MPI-18K`.
-
-## Quick start
+Python 3.9+ and PyTorch 2.1+ are required.
 
 ```bash
-python -m pip install -r requirements.txt
-python examples/load_mixps.py \
-  --root data \
-  --dataset MixPS-Simulation-7K \
-  --split train \
-  --index 0
+git clone https://github.com/BUAALGH/MixPS-MPI-18K.git
+cd MixPS-MPI-18K/MixPS-Net
+python -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -e .
 ```
 
-See [DATA_LOADING_AND_USAGE.md](docs/DATA_LOADING_AND_USAGE.md) for NumPy and
-PyTorch usage, and [DATASET_INTRODUCTION.md](docs/DATASET_INTRODUCTION.md) for
-the full dataset card.
+## Training
 
-## MixPS-Net
-
-The official four-stage HCMM-guided separation model, 100-epoch training
-configuration, and evaluation code are available in
-[`MixPS-Net/`](MixPS-Net/README.md).
-
-## Integrity check
+The reference experiment trains for **100 epochs** with AdamW, cosine
+learning-rate decay, batch size 8, and seed 42:
 
 ```bash
-python tools/validate_dataset.py --root data --mode full
-sha256sum --check manifests/SHA256SUMS
+CUDA_VISIBLE_DEVICES=0 python train.py \
+  --config configs/mixps_net.yaml \
+  --data-root /path/to/MixPS-MPI-18K/data \
+  --output-dir runs/mixps_net
 ```
+
+Only Simulation-7K and Synthetic-10K training splits are used for
+optimization. RealWorld-41 is held out for testing. One MaxAbs scale computed
+from M is shared by its paired M, P, and S tensors.
+
+Resume an interrupted run without changing the experiment directory:
+
+```bash
+CUDA_VISIBLE_DEVICES=0 python train.py \
+  --config configs/mixps_net.yaml \
+  --data-root /path/to/MixPS-MPI-18K/data \
+  --output-dir runs/mixps_net \
+  --resume runs/mixps_net/last.pt
+```
+
+### Reference configuration
+
+| Item | Value |
+| --- | --- |
+| Epochs / batch size | 100 / 8 |
+| Optimizer | AdamW |
+| Initial / minimum learning rate | `1e-4` / `1e-6` |
+| Weight decay | `1e-5` |
+| Scheduler | Cosine annealing |
+| Loss weights `(P,S,M)` | `(1.0, 1.0, 0.25)` |
+| Seed | 42 |
+| Training augmentation | Random flips and 90-degree rotations |
+
+Training writes `best.pt`, `last.pt`, `history.json`, and a copy of the
+resolved configuration to the selected output directory.
+
+## Evaluation
+
+```bash
+CUDA_VISIBLE_DEVICES=0 python evaluate.py \
+  --checkpoint runs/mixps_net/best.pt \
+  --data-root /path/to/MixPS-MPI-18K/data \
+  --output runs/mixps_net/metrics.json
+```
+
+The evaluator reports the mean and population standard deviation of
+per-sample, per-harmonic PSNR and SSIM for P and S on all three test subsets.
+Each channel uses its ground-truth dynamic range. The optional simulation
+stress sample is excluded by default.
+
+## Reproducibility check
+
+The full protocol is stored in
+[`MixPS-Net/configs/mixps_net.yaml`](MixPS-Net/configs/mixps_net.yaml). The
+fixed seed controls Python, NumPy, and PyTorch, and deterministic CUDA behavior
+is enabled by default.
+
+```bash
+cd MixPS-Net
+python -m pip install pytest
+python -m pytest tests/test_model.py
+```
+
+The default reconstruction objective is:
+
+```text
+L = 1.0 * L1(P_hat,P) + 1.0 * L1(S_hat,S) + 0.25 * L1(M_hat,M)
+```
+
+For implementation details, see the
+[`MixPS-Net` reproducibility guide](MixPS-Net/README.md).
 
 ## Citation
 
-Please cite the Zenodo record associated with the release. Replace the DOI
-placeholder after reserving or publishing the Zenodo DOI:
+If this dataset or implementation is useful, please cite the dataset record:
 
 ```bibtex
 @dataset{li_2026_mixps_mpi_18k,
@@ -139,9 +247,9 @@ placeholder after reserving or publishing the Zenodo DOI:
 
 ## License and contact
 
-The dataset authors must select and add the final data license before the
-Zenodo record is published. This is intentionally not inferred automatically,
-because source-data and redistribution terms must be verified by the authors.
+MixPS-Net source code is released under the
+[MIT License](MixPS-Net/LICENSE). Dataset use is governed by the license shown
+in its Zenodo record.
 
 Contact: Guanghui Li, Beihang University (BUAA),
 `liguanghui@buaa.edu.cn`.
